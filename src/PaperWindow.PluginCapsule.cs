@@ -8,13 +8,13 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    private const double PluginCapsuleMinContentWidth = 34;
-    private const double PluginCapsuleMaxContentWidth = 320;
-    private const double PluginCapsuleComponentGap = 5;
-    private const double PluginCapsuleStatusDotSize = 7;
-    private const double PluginCapsuleDefaultProgressRingSize = 18;
-    private const double PluginCapsuleDefaultProgressBarWidth = 30;
-    private const double PluginCapsuleFillProgressBarMinWidth = 18;
+    private static double PluginCapsuleMinContentWidth => InjectionParameters.PluginCapsuleMinWidth.Value;
+    private static double PluginCapsuleMaxContentWidth => InjectionParameters.PluginCapsuleMaxWidth.Value;
+    private static double PluginCapsuleComponentGap => InjectionParameters.PluginCapsuleGap.Value;
+    private static double PluginCapsuleStatusDotSize => InjectionParameters.PluginCapsuleDotSize.Value;
+    private static double PluginCapsuleDefaultProgressRingSize => InjectionParameters.PluginCapsuleRingSize.Value;
+    private static double PluginCapsuleDefaultProgressBarWidth => InjectionParameters.PluginCapsuleBarWidth.Value;
+    private static double PluginCapsuleFillProgressBarMinWidth => InjectionParameters.PluginCapsuleBarMinWidth.Value;
     private PaperCapsulePresentation? _pluginCapsulePresentation;
     private Grid? _pluginCapsuleRegularHost;
     private UIElement? _pluginCapsuleRegularDefaultContent;

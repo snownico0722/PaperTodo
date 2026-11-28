@@ -5,8 +5,8 @@ namespace PaperTodo;
 internal readonly record struct PaperBottomBarLayoutItem(PaperBottomBarSide Side, int Order, int Priority, double Width);
 internal readonly record struct PaperBottomBarLayout(int[] Left, int[] Right, bool Omitted)
 {
-    internal const double ItemGap = 2;
-    private const double GroupGap = 8;
+    internal static double ItemGap => InjectionParameters.BottomBarItemGap.Value;
+    private static double GroupGap => InjectionParameters.BottomBarGroupGap.Value;
 
     // Input indices are in stable provider/item-id order. Output groups are ordered outside-in.
     internal static PaperBottomBarLayout Plan(IReadOnlyList<PaperBottomBarLayoutItem> items, double available, double ellipsis)

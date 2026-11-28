@@ -17,9 +17,9 @@ namespace PaperTodo;
 
 public sealed partial class MarkdownTextBox : TextEditor
 {
-    private const int MaxClipboardEncodedImageBytes = 32 * 1024 * 1024;
-    private const double ImageBlockVerticalPadding = 7;
-    private const double ImageBlockHorizontalPadding = 2;
+    private static int MaxClipboardEncodedImageBytes => InjectionParameters.NoteClipboardImageBytes.Value;
+    private static double ImageBlockVerticalPadding => InjectionParameters.NoteImageVerticalPadding.Value;
+    private static double ImageBlockHorizontalPadding => InjectionParameters.NoteImageHorizontalPadding.Value;
     private static readonly string[] EncodedClipboardImageFormats =
         ["PNG", "image/png", "JFIF", "image/jpeg", "image/jpg", "GIF", "image/gif"];
 
@@ -68,7 +68,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         ApplyTypographyRendering();
 
         Options.ConvertTabsToSpaces = false;
-        Options.IndentationSize = 4;
+        Options.IndentationSize = InjectionParameters.NoteIndentationSize.Value;
         Options.EnableHyperlinks = false;
         Options.EnableEmailHyperlinks = false;
 
@@ -358,6 +358,10 @@ public sealed partial class MarkdownTextBox : TextEditor
             ? WrapEachSelectedLine(selected, prefix, suffix)
             : prefix + selected + suffix;
 
+        if (!CanApplyTextReplacementWithNotice(replacement))
+        {
+            return;
+        }
         SelectedText = replacement;
         Focus();
 
@@ -427,6 +431,10 @@ public sealed partial class MarkdownTextBox : TextEditor
         var selected = string.IsNullOrWhiteSpace(SelectedText) ? Strings.Get("MarkdownDefaultLinkLabel") : SelectedText;
         var markdown = $"[{selected}](https://)";
 
+        if (!CanApplyTextReplacementWithNotice(markdown))
+        {
+            return;
+        }
         SelectedText = markdown;
         Focus();
 
@@ -443,6 +451,10 @@ public sealed partial class MarkdownTextBox : TextEditor
 
         var start = Math.Clamp(SelectionStart, 0, Document.TextLength);
         var lineStart = Document.GetLineByOffset(start).Offset;
+        if (!CheckTextLimitWithNotice(CanApplyTextReplacement(prefix, lineStart, 0)))
+        {
+            return;
+        }
         Select(lineStart, 0);
         SelectedText = prefix;
 
@@ -1034,6 +1046,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             target.Start,
             placeholderBlock);
         EnsureImageInsertionFits(
+            target.OriginalText,
             ReplaceRange(
                 target.OriginalText,
                 target.Start,
@@ -1085,7 +1098,7 @@ public sealed partial class MarkdownTextBox : TextEditor
             insertionPlan.Target.Start,
             insertionPlan.Target.SelectionLength,
             insertion);
-        EnsureImageInsertionFits(candidateText, assets.Count);
+        EnsureImageInsertionFits(insertionPlan.Target.OriginalText, candidateText, assets.Count);
 
         return CommitDocumentReplacement(insertionPlan.Target, insertion);
     }
@@ -1230,7 +1243,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsReturn &&
             e.Key == System.Windows.Input.Key.Enter &&
-            !CanApplyTextReplacementWithNotice(NewLineTextAtCaret()))
+            !CanInsertNewLineWithNotice())
         {
             e.Handled = true;
             return;
@@ -1239,7 +1252,8 @@ public sealed partial class MarkdownTextBox : TextEditor
         if (!IsReadOnly &&
             _acceptsTab &&
             e.Key == System.Windows.Input.Key.Tab &&
-            !CanApplyTextReplacementWithNotice("\t"))
+            Keyboard.Modifiers == ModifierKeys.None &&
+            !CheckTextLimitWithNotice(CanIndentSelection()))
         {
             e.Handled = true;
             return;
@@ -1264,24 +1278,6 @@ public sealed partial class MarkdownTextBox : TextEditor
         }
 
         base.OnPreviewTextInput(e);
-    }
-
-    private string NewLineTextAtCaret()
-    {
-        if (Document == null || Document.TextLength == 0)
-        {
-            return Environment.NewLine;
-        }
-
-        try
-        {
-            var offset = Math.Clamp(CaretOffset, 0, Document.TextLength);
-            return NewLineTextFor(Document.GetLineByOffset(offset));
-        }
-        catch
-        {
-            return Environment.NewLine;
-        }
     }
 
     private bool TryDeleteSelectedImageReference()
@@ -1365,7 +1361,8 @@ public sealed partial class MarkdownTextBox : TextEditor
 
     private bool EnsureTrailingImageAnchorLine()
     {
-        if (Document == null || Document.TextLength <= 0 || _isEnsuringImageAnchorLine)
+        if (Document == null || Document.TextLength <= 0 || _isEnsuringImageAnchorLine ||
+            (MaxLength > 0 && Document.TextLength > MaxLength))
         {
             return false;
         }
@@ -1715,13 +1712,13 @@ public sealed partial class MarkdownTextBox : TextEditor
             viewport = ActualWidth;
         }
 
-        var width = viewport - ImageBlockHorizontalPadding * 2 - 10;
+        var width = viewport - ImageBlockHorizontalPadding * 2 - InjectionParameters.NoteImageViewportReserve.Value;
         if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0)
         {
-            return 240;
+            return InjectionParameters.NoteImageTargetWidth.Resolve(InjectionParameters.NoteImageFallbackWidth.Value);
         }
 
-        return Math.Max(80, width);
+        return InjectionParameters.NoteImageTargetWidth.Resolve(Math.Max(InjectionParameters.NoteImageMinimumWidth.Value, width));
     }
 
     private static bool ClipboardHasText()
@@ -1819,7 +1816,7 @@ public sealed partial class MarkdownTextBox : TextEditor
         {
             switch (data)
             {
-                case byte[] bytes when bytes.Length is > 0 and <= MaxClipboardEncodedImageBytes:
+                case byte[] bytes when bytes.Length > 0 && bytes.Length <= MaxClipboardEncodedImageBytes:
                     using (var stream = new MemoryStream(bytes, writable: false))
                     {
                         bitmap = DecodeBitmapStream(stream);

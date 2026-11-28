@@ -15,7 +15,7 @@ public sealed partial class StateStore
 {
     // A user-requested import is authoritative. Normal saves remain the original
     // whole-file atomic writer, with no revision metadata or retained history.
-    internal StateReloadCommit ReloadExternalState(long version)
+    internal StateReloadCommit ReloadExternalState(long version, AppState? current = null)
     {
         _writeLock.Wait();
         try
@@ -33,6 +33,7 @@ public sealed partial class StateStore
             ValidateExternalDocument(document);
             var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions)
                 ?? throw new JsonException("data.json cannot be null.");
+            ValidateImportedNoteLengths(state, current);
             MigrateLegacyTopBarSettings(state, json);
             NormalizeWorkspaceDocument(state);
 
@@ -80,13 +81,27 @@ public sealed partial class StateStore
         ValidateIdentities(papers, "papers");
         foreach (var node in papers)
         {
-            if (node!["content"] is JsonValue content && content.TryGetValue<string>(out var text) &&
-                text.Length > PaperWindow.NoteTextMaxLength &&
-                text.Length - MarkdownImageReferences.TrailingAnchorDelimiterLength(text) >
-                    PaperWindow.NoteTextMaxLength)
-                throw new JsonException("Note content exceeds the editor length limit.");
-            if (node["items"] is JsonArray items) ValidateIdentities(items, "items");
+            if (node!["items"] is JsonArray items) ValidateIdentities(items, "items");
             else if (node!.AsObject().ContainsKey("items")) throw new JsonException("items must be an array.");
+        }
+    }
+
+    // The edit limit applies to incoming changes, not to reading a complete stored snapshot.
+    private static void ValidateImportedNoteLengths(AppState incoming, AppState? current)
+    {
+        Dictionary<string, int>? currentLengths = null;
+        var limit = PaperWindow.NoteTextMaxLength;
+        foreach (var paper in incoming.Papers)
+        {
+            var content = paper.Content ?? "";
+            var length = content.Length;
+            if (length <= limit ||
+                length - MarkdownImageReferences.TrailingAnchorDelimiterLength(content) <= limit)
+                continue;
+            currentLengths ??= current?.Papers.ToDictionary(p => p.Id, p => p.Content?.Length ?? 0,
+                StringComparer.Ordinal) ?? [];
+            if (length > currentLengths.GetValueOrDefault(paper.Id))
+                throw new JsonException("Note content exceeds the editor length limit.");
         }
     }
 

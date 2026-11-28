@@ -553,9 +553,41 @@ Re-enabling a plugin already recognized by PaperTodo resumes it according to its
 > [!WARNING]
 > PaperTodo **does not provide a security sandbox for plugins**. Treat both Native and Web plugins as trusted code and install only from trusted sources. Per-workspace data folders do not restrict a plugin's system access. Developers can refer to the [Plugin Development Manual](../plugin-samples/README.md).
 
+#### Good Lock and Global user.json
+
+**Good Lock** is the official parameter editor companion and requires plugin API 2.6. Following the installation steps above, copy the complete built [`plugins/official.good-lock.native/`](../plugins/official.good-lock.native/) folder to the matching path beside the program. Restart, then select **Good Lock** under a note paper's **Body type**. If a Good Lock paper already exists, open it directly.
+
+The **`user.json` beside the program is shared by every workspace** and contains only parameters you choose to override. PaperTodo reads it independently at startup, so Good Lock need not be open for overrides to work. Switching workspaces does not rewrite the file or copy override values into ordinary settings. See the [global parameter guide and complete catalog](USER_INJECTION.en.md) for names, types, units and application timing.
+
+1. Select **Open file** to edit `user.json` in the system's associated editor. The first use creates an empty `{}`. The file is a JSON object mapping parameter names to values; include only your overrides. For example:
+
+   ```json
+   {
+     "note.images.autoCompressedDimensionPx": 1536,
+     "todo.paste.staggerMs": 25
+   }
+   ```
+
+2. Save the file and return to Good Lock. Its rows show file overrides, older overrides still in use, and this paper's pending edits. Each row includes a name, description, **Default**, and **Modified** value. A dynamic default may show a short calculation note or `—`.
+3. Select **Apply** at the upper right to adopt the latest file and save pending reset or adjustment actions. Immediate parameters take effect on application; parameters read when used take effect on their next corresponding operation or object creation. For parameters that require a restart, select **Restart**: it applies first, then saves and exits normally, restarts, and returns to this paper.
+
+| Status dot | Meaning |
+| --- | --- |
+| Gray | File changes or pending edits have not been adopted. Keys unknown to this version are also retained in gray with an explanation. |
+| Green | The running program has adopted the value. Parameters applied on next use still follow their own creation or interaction timing. |
+| Red | Apply has accepted the file change, but a restart is required before it takes effect. Removing an override that requires a restart can also have this status. |
+
+**Reset this value** removes that key; **Reset all** clears all overrides. Both create pending edits that are committed by Apply. Removing a key restores its original source, including ordinary settings, presets and dynamic calculations, rather than writing a fixed number back. Explicitly writing a value equal to the default still counts as an override. You may also remove keys externally, replace the file with `{}`, or delete `user.json`, then apply or restart. This does not reset ordinary settings or paper data. Closing or deleting the Good Lock paper, or removing the plugin, does not clear `user.json`.
+
+**Save as** combines the file and pending edits into another JSON file, preserving sparse overrides without changing the active file path. If an external edit conflicts with the pending edits' file revision, Good Lock refreshes the file and retains those edits; review them before applying again. The file is read when the paper opens, activates or expands, with no background file watcher.
+
+An ordinary setting **fully controlled** by global overrides is disabled with an explanation, while its original selection is retained. Overriding only part of a compound preset leaves that preset available to control the remaining parts. Remove the corresponding overrides and apply to unlock it; parameters that require a restart remain locked until restart.
+
+Internal parameters and their algorithms may change between versions, with no promise of permanent compatibility. A red number is outside its recommended range. For the per-note length limit, reset or raise values below the 100,000-character minimum before applying. The wand offers limited adjustments, may consider related parameters, and does not guarantee layout or algorithm results. Invalid combinations or extreme values can cause display problems, resource exhaustion, crashes or data loss; users accept the consequences of these adjustments, and no additional automatic correction or recovery flow is provided for them.
+
 #### Sample Plugins and Codex CLI Bridge
 
-Runnable examples in `plugins/` include a native clock, Pomodoro timer, review archive, Web clock, **Webhook event forwarding**, and **Codex CLI Bridge**. Copy only the plugins you need.
+Runnable examples in `plugins/` include **Good Lock**, a native clock, Pomodoro timer, review archive, Web clock, **Webhook event forwarding**, and **Codex CLI Bridge**. Copy only the plugins you need.
 
 The **Webhook event-forwarding plugin** routes paper, todo, note-change, and upcoming todo-reminder events to HTTP(S) URLs by event type. Route changes take effect immediately. See the [Webhook plugin guide](../plugin-samples/PaperTodo.Plugin.Webhook/README.en.md) for installation, configuration, and forwarding details.
 

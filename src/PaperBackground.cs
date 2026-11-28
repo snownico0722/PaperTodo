@@ -22,8 +22,8 @@ internal static class PaperBackgroundLayouts
 
 internal static class PaperBackground
 {
-    private const int MaxDecodePixelDimension = 4096;
-    private const double BlendedImageOpacity = 0.30;
+    private static int MaxDecodePixelDimension => InjectionParameters.PaperBackgroundDecodeDimension.Value;
+    private static double BlendedImageOpacity => InjectionParameters.PaperBackgroundBlendOpacity.Value;
     private static readonly string[] CandidateNames =
         ["papertodo.png", "papertodo.jpg", "papertodo.jpeg"];
     private static BitmapSource? _cachedBitmap;

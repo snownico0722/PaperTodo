@@ -177,7 +177,7 @@ public sealed partial class AppController : IDisposable
         // Force cap: while edits keep resetting the idle timer, still flush at least every 10s.
         _saveTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(1000)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.SaveIdleMs.Value)
         };
         _saveTimer.Tick += (_, _) =>
         {
@@ -186,7 +186,7 @@ public sealed partial class AppController : IDisposable
         };
         _forceSaveTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(10)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.SaveForceMs.Value)
         };
         _forceSaveTimer.Tick += (_, _) =>
         {
@@ -196,13 +196,13 @@ public sealed partial class AppController : IDisposable
 
         _topmostRefreshTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.FullscreenPollMs.Value)
         };
         _topmostRefreshTimer.Tick += (_, _) => RefreshTopmostForForegroundWindow();
 
         _fullscreenEventDebounceTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(75)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.FullscreenDebounceMs.Value)
         };
         _fullscreenEventDebounceTimer.Tick += (_, _) =>
         {
@@ -216,7 +216,7 @@ public sealed partial class AppController : IDisposable
 
         _displayMetricsRefreshTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(250)
+            Interval = TimeSpan.FromMilliseconds(InjectionParameters.DisplayRefreshMs.Value)
         };
         _displayMetricsRefreshTimer.Tick += (_, _) =>
         {
@@ -458,7 +458,7 @@ public sealed partial class AppController : IDisposable
             _trayRefreshSuppressionDepth++;
             try
             {
-                ShowPaper(paper);
+                ShowNewPaper(paper);
                 if (sourcePaper != null && _windows.TryGetValue(paper.Id, out var window))
                 {
                     ForceWindowToFront(window);
@@ -524,7 +524,6 @@ public sealed partial class AppController : IDisposable
             AlwaysOnTop = sourcePaper?.AlwaysOnTop ?? false
         };
         InitializeNewPaperCapsuleQueue(paper, sourcePaper, cursorMonitor?.DeviceName);
-
         if (cursorMonitor is { } targetMonitor)
         {
             paper.Width = ClampPaperDimension(
@@ -537,6 +536,8 @@ public sealed partial class AppController : IDisposable
                 paper.Type == PaperTypes.Note ? PaperLayoutDefaults.NoteDefaultHeight : PaperLayoutDefaults.TodoDefaultHeight,
                 PaperLayoutDefaults.MinHeight,
                 Math.Max(PaperLayoutDefaults.MinHeight, targetMonitor.WorkArea.Height - 80));
+            // Explicit initial dimensions are injected after the ordinary creation clamp.
+            ApplyInjectedNewPaperSize(paper);
             if (sourcePaper == null &&
                 TryCreateCursorPaperPlacement(paper.Width, paper.Height, out var cursorLeft, out var cursorTop))
             {
@@ -551,6 +552,7 @@ public sealed partial class AppController : IDisposable
         else
         {
             RescuePaperIfOffScreen(paper, State.Papers.Count);
+            ApplyInjectedNewPaperSize(paper);
         }
         ClampNewPaperAwayFromDeepCapsuleStrip(paper);
         var placementArea = cursorMonitor is { } target
@@ -1282,7 +1284,13 @@ public sealed partial class AppController : IDisposable
         paper.IsCollapsed = collapsed;
     }
 
-    public void ShowPaper(PaperData paper, bool activate = true)
+    public void ShowPaper(PaperData paper, bool activate = true) =>
+        ShowPaperCore(paper, activate, applyInitialInjection: false);
+
+    internal void ShowNewPaper(PaperData paper, bool activate = true) =>
+        ShowPaperCore(paper, activate, applyInitialInjection: true);
+
+    private void ShowPaperCore(PaperData paper, bool activate, bool applyInitialInjection)
     {
         if (IsExiting)
         {
@@ -1304,6 +1312,7 @@ public sealed partial class AppController : IDisposable
         {
             RescuePaperIfOffScreen(paper, State.Papers.IndexOf(paper));
         }
+        if (applyInitialInjection) ApplyInjectedNewPaperSize(paper);
         Rect? snapTileBounds = null;
 
         var showAsDeepCapsuleOnly = State.UseCapsuleMode && State.UseDeepCapsuleMode && paper.IsCollapsed;
@@ -1600,7 +1609,7 @@ public sealed partial class AppController : IDisposable
         {
             var now = DateTimeOffset.UtcNow;
             var allowGlobalScan = forceGlobalScan ||
-                now - _lastFullscreenGlobalScanAt >= TimeSpan.FromSeconds(5);
+                now - _lastFullscreenGlobalScanAt >= TimeSpan.FromMilliseconds(InjectionParameters.FullscreenScanMs.Value);
             if (allowGlobalScan)
             {
                 _lastFullscreenGlobalScanAt = now;
@@ -2060,7 +2069,7 @@ public sealed partial class AppController : IDisposable
         if (removed.Replacement is { } replacement)
         {
             _trayRefreshSuppressionDepth++;
-            try { ShowPaper(replacement); }
+            try { ShowNewPaper(replacement); }
             finally { _trayRefreshSuppressionDepth--; }
         }
 
@@ -3714,7 +3723,16 @@ public sealed partial class AppController : IDisposable
                 continue;
             }
 
-            changed |= RescuePaperIfOffScreen(State.Papers[i], i);
+            var paper = State.Papers[i];
+            changed |= RescuePaperIfOffScreen(paper, i);
+            if (_workspace.InitialPaperId is { } initialPaperId && paper.Id == initialPaperId)
+            {
+                var previousWidth = paper.Width;
+                var previousHeight = paper.Height;
+                ApplyInjectedNewPaperSize(paper);
+                changed |= DimensionChanged(previousWidth, paper.Width) || DimensionChanged(previousHeight, paper.Height);
+                _workspace.InitialPaperId = null;
+            }
         }
 
         return changed;
@@ -3726,16 +3744,19 @@ public sealed partial class AppController : IDisposable
         var persistedSnapTile = LooksLikePersistedSnapTileGeometry(paper, area);
         var originalWidth = paper.Width;
         var originalHeight = paper.Height;
-        paper.Width = ClampPaperDimension(
-            paper.Width,
-            paper.Type == PaperTypes.Note ? PaperLayoutDefaults.NoteDefaultWidth : PaperLayoutDefaults.TodoDefaultWidth,
-            PaperLayoutDefaults.MinWidth,
-            Math.Max(PaperLayoutDefaults.MinWidth, area.Width - 80));
-        paper.Height = ClampPaperDimension(
-            paper.Height,
-            paper.Type == PaperTypes.Note ? PaperLayoutDefaults.NoteDefaultHeight : PaperLayoutDefaults.TodoDefaultHeight,
-            PaperLayoutDefaults.MinHeight,
-            Math.Max(PaperLayoutDefaults.MinHeight, area.Height - 80));
+        if (InjectionParameters.RestoreConstrainSize.Value)
+        {
+            paper.Width = ClampPaperDimension(
+                paper.Width,
+                paper.Type == PaperTypes.Note ? PaperLayoutDefaults.NoteDefaultWidth : PaperLayoutDefaults.TodoDefaultWidth,
+                PaperLayoutDefaults.MinWidth,
+                Math.Max(PaperLayoutDefaults.MinWidth, area.Width - 80));
+            paper.Height = ClampPaperDimension(
+                paper.Height,
+                paper.Type == PaperTypes.Note ? PaperLayoutDefaults.NoteDefaultHeight : PaperLayoutDefaults.TodoDefaultHeight,
+                PaperLayoutDefaults.MinHeight,
+                Math.Max(PaperLayoutDefaults.MinHeight, area.Height - 80));
+        }
         var resized = DimensionChanged(originalWidth, paper.Width) ||
             DimensionChanged(originalHeight, paper.Height);
 

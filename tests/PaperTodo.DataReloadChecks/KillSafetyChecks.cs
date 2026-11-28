@@ -84,7 +84,7 @@ internal static partial class Program
                 var baseline = J(File.ReadAllText(primary)); baseline["papers"]![0]!["content"] = "older baseline";
                 var local = System.Text.Json.JsonSerializer.Deserialize<AppState>(candidateJson, StateStore.JsonOptions)!;
                 var preview = store.PreviewExternalMerge(local, 2, baseline.ToJsonString());
-                store.CommitExternalMerge(ResolvePreview(preview, ConflictChoice.KeepMemory), preview.ObservedDiskJson!, 2);
+                store.CommitExternalMerge(ResolvePreview(preview, ConflictChoice.KeepMemory), preview.ObservedDiskJson!, 2, local);
             }
             return 3;
         }

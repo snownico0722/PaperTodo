@@ -6,6 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(InjectionSystemChecks)' == 'true'">
+    <StartupObject>InjectionSystemRunner</StartupObject>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(InjectionSystemChecks)' != 'true'">
+    <Compile Remove="InjectionSystem*.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(InjectionSystemChecks)' == 'true'">
+    <ProjectReference Include="../../plugin-samples/PaperTodo.Plugin.GoodLock/PaperTodo.Plugin.GoodLock.csproj" />
+  </ItemGroup>
   <ItemGroup><ProjectReference Include="../../PaperTodo.csproj" />
     <ProjectReference Include="../../plugin-samples/PaperTodo.Plugin.ReviewArchive/PaperTodo.Plugin.ReviewArchive.csproj" /></ItemGroup>
   <ItemGroup><None Update="bridge-check.cjs" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>

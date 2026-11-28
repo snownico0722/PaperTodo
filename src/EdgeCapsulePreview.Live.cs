@@ -211,8 +211,8 @@ internal abstract class EdgeCapsuleLivePreviewView : Grid
 
 internal static class EdgeCapsulePreviewMeasure
 {
-    private const double BaseApproximateGlyphWidthDip = 6.4;
-    private const double FixedChromeReserveWidthDip = 72;
+    private static double BaseApproximateGlyphWidthDip => InjectionParameters.PreviewApproximateGlyphWidthDip.Value;
+    private static double FixedChromeReserveWidthDip => InjectionParameters.PreviewChromeReserveWidthDip.Value;
     private static double ApproximateGlyphWidthDip =>
         AppTypography.Scale(BaseApproximateGlyphWidthDip);
 
@@ -243,25 +243,25 @@ internal static class EdgeCapsulePreviewMeasure
             (body ?? string.Empty)
                 .Replace("\r", string.Empty, StringComparison.Ordinal)
                 .Split('\n')
-                .Take(32)
+                .Take(InjectionParameters.PreviewMeasureWidthLineBudget.Value)
                 .Select(DisplayWidth)
                 .DefaultIfEmpty(0)
                 .Max() * bodyScale);
         var desired = Math.Max(0, fixedReserveWidthDip) +
-            Math.Min(64, longest) * ApproximateGlyphWidthDip;
+            Math.Min(InjectionParameters.PreviewMeasureWidthUnitBudget.Value, longest) * ApproximateGlyphWidthDip;
         return Math.Clamp(Math.Ceiling(desired), minimum, maximum);
     }
 
     public static int EstimateWrappedLines(string? text, double contentWidthDip)
     {
         var unitsPerLine = Math.Max(
-            12,
+            InjectionParameters.PreviewMeasureMinimumLineUnits.Value,
             (int)Math.Floor(contentWidthDip / ApproximateGlyphWidthDip));
         var total = 0;
         foreach (var line in (text ?? string.Empty)
                      .Replace("\r", string.Empty, StringComparison.Ordinal)
                      .Split('\n')
-                     .Take(80))
+                     .Take(InjectionParameters.PreviewMeasureWrappedLineBudget.Value))
         {
             total += Math.Max(
                 1,

@@ -84,6 +84,7 @@
 | D-072 | Ctrl 整队拖拽归属胶囊自由队列 | Accepted | Edge / 队列 |
 | D-073 | 默认纸片缩放使用预计算高斯九宫格阴影 | Accepted | Paper / Rendering / performance |
 | D-074 | 背景偏好并入工作区设置 | Accepted | 外观 / 持久化 |
+| D-076 | 单一全局 user.json 的广泛 typed 注入与 Good Lock | Accepted | 全局参数 / 插件 / 性能 |
 
 ## 维护规则
 
@@ -956,7 +957,7 @@ Runtime 使用 provider-scoped state；Body/Mini 继续使用 per-paper frontend
 
 ## D-025 — Note 图片若干限制为已接受取舍
 
-**Status:** Accepted
+**Status:** Accepted for ordinary defaults; D-076 allows explicit global overrides of exposed numeric limits.
 
 ### Decision
 
@@ -2245,3 +2246,36 @@ The preview should show an available landing rather than make a target continuou
 
 - `src/PaperBottomBarLayout.cs`、`src/PaperWindow.PluginBottomBar.cs`、`src/AppController.PluginBottomBar.cs`。
 - `tests/PaperTodo.LifecycleChecks/PaperBottomBarChecks.cs`、`plugin-samples/PaperTodo.Plugin.BottomBarWeb/`。
+
+---
+
+## D-076 — 单一全局 user.json 的广泛 typed 注入与 Good Lock (2026-11-10)
+
+**Status:** Accepted. Extends the configurable numeric boundary of D-025 without changing its ordinary defaults or image ownership.
+
+### Context
+
+用户在本轮明确要求将自定义参数视为官方注入接口，在合理代价内尽量广泛开放固定值、公式系数和中间结果；最优先衡量未使用自定义注入时的成本，接受少量现代 CPU 开销，不要求绝对零成本。用户同时确认全局只有一份配置，不按工作区分份。此前围绕少数预览参数的收窄方案不足以覆盖这个目标。
+
+### Decision
+
+- 程序目录的单一 `user.json` 保存稀疏覆盖。键存在即覆盖，值等于默认也不解除，删除才恢复。普通设置的存储值保留，完全被覆盖的相应入口只读。
+- 首次合入保留原有调参点，并以合入时主线的取值与公式为默认。后续同一键保持原意，退役键以未知键保留在文件内，其他键继续采用；Good Lock 使用宿主返回的目录，参数增删无需更新插件。
+- 声明 typed slots，由启动和显式 Apply 绑定。固定值直接读缓存；动态结果在原计算点覆盖，未覆盖时公式继续使用实时状态。无需为显示一个“默认数字”额外模拟上下文；可以使用简短说明或留空。
+- 笔记字数上限只允许从原默认值调高。恢复默认后，旧长文可以保持或减少字数，工作区的切换和恢复继续保留原文。工作区笔记图片总预算使用固定值。
+- 大范围暴露现有成本合理的消费点，不通过运行时任意字段反射覆盖对象，不引入新的窗口/队列 authority。需要构造时绑定或已有缓存不适合热刷新的参数准确声明重启生效。
+- Good Lock 作为 Native 插件提供修改项检查、外部编辑文件入口、Apply、重置、另存为和正常重启。建议范围只提示；魔棒按用户点击提供有限的单项或相关参数建议，不自动修改其他项，不承诺消除布局裁切、指数工作量、崩溃或数据损坏。
+- 用户自定义带来的崩溃或数据损坏由使用者承担，不为此建立配置恢复、自动回滚或额外兜底。已有正常文件写入完整性、插件权限和普通业务边界继续由原 owner 负责。
+- 预览裁切是允许并有意保留的视觉引导；本轮维持现有默认公式与裁切。主动追求新的裁切表现放在独立 PR，不将 #450 的场景设为本轮产品目标。
+
+### Why / Rejected
+
+限制为少量参数不能满足广泛注入目标；每帧按字符串查询或监视配置文件会让未使用者承担持续工作；为每个动态结果构建实时默认值展示器又会引入第二套计算和失效机制。typed slot 让实际模块继续拥有公式、缓存和刷新，不需要一般化的依赖图或全局设置同步框架。
+
+未采用自动纠错或故障恢复，因为用户明确接受自定义值的后果。有限优化保留为可选建议，避免把粗略关系包装成稳定性保证。工作区仍保存自己的普通设置，全局覆盖独立作用于当前运行中的工作区。
+
+### Evidence
+
+- 需求来源：用户 2026-11-10 本轮对分析第三、四、五、六、七、九部分的明确修正，以及“全局一份”“开一个新的 PR”的实施授权。用户于 2026-11-18 确认图片总预算固定、笔记字数上限只允许调高及恢复默认后的旧笔记行为。
+- 实现：`InjectionParameter`、`UserInjection`、各 `InjectionParameters.*`、`AppController.UserInjectionRuntime`、`IPaperInjectionApi`、`plugin-samples/PaperTodo.Plugin.GoodLock`。
+- 行为证据：`PaperTodo.UserInjectionChecks` 的覆盖存在/删除、动态公式、外部文件与 Apply、重启状态、revision 冲突、未知键保留、有限建议和不写普通数据检查；`SettingsApiChecks` 的权限、生命周期和普通设置只读联动。微基准只描述槽位热循环，不代表 Windows 整机或自定义参数工作量的性能保证。

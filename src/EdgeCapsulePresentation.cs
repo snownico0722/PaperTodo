@@ -43,15 +43,15 @@ internal readonly record struct EdgeCapsuleMotion(
 
     public static EdgeCapsuleMotion Animate(
         EdgeCapsuleTransitionReason reason,
-        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds) =>
-        new(EdgeCapsuleMotionKind.Animate, Math.Max(1, durationMilliseconds), reason);
+        int? durationMilliseconds = null) =>
+        new(EdgeCapsuleMotionKind.Animate, Math.Max(1, durationMilliseconds ?? EdgeCapsuleLayout.SlotMoveMilliseconds), reason);
 
     public static EdgeCapsuleMotion Preserve(
         EdgeCapsuleTransitionReason reason,
-        int durationMilliseconds = EdgeCapsuleLayout.SlotMoveMilliseconds) =>
+        int? durationMilliseconds = null) =>
         new(
             EdgeCapsuleMotionKind.Preserve,
-            Math.Max(1, durationMilliseconds),
+            Math.Max(1, durationMilliseconds ?? EdgeCapsuleLayout.SlotMoveMilliseconds),
             reason);
 }
 

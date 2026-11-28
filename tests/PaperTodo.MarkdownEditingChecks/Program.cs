@@ -19,6 +19,47 @@ internal static partial class Program
         ClipboardImageChecks.Run(Check);
         Check("Line spacing changes wrapped note lines in both modes", CheckNoteLineSpacing);
         Check("All note spacing levels render the installed regular and bold files", CheckCustomFontSpacing);
+        Check("Pasting into an existing over-limit note permits corrections and deletions", () =>
+        {
+            using var editor = new Editor("abcdef");
+            var box = editor.Box;
+            // AvalonEdit raises Pasting on its TextArea. The control template attaches it
+            // to MarkdownTextBox, where both production paste handlers are registered.
+            var window = new Window { Content = box, Width = 320, Height = 160,
+                ShowInTaskbar = false, ShowActivated = false };
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                Require(box.IsAncestorOf(box.TextArea), "native paste routes through the Markdown editor");
+                var rejections = 0;
+                box.PasteRejected += () => rejections++;
+                box.MaxLength = 3;
+                Clipboard.SetText("x");
+                box.Select(0, 1);
+                box.Paste();
+                Equal("xbcdef", box.PersistentText, "equal-length correction survives");
+                box.Select(1, 2);
+                box.Paste();
+                Equal("xxdef", box.PersistentText, "shortening can leave the note above the cap");
+                box.Select(1, 0);
+                box.Paste();
+                Equal("xxdef", box.PersistentText, "growth stays blocked after shortening");
+                Equal(1, rejections, "only the growing paste raises the rejection notice");
+                box.Select(0, 2);
+                box.WrapSelection("**", "**");
+                Equal("xxdef", box.PersistentText, "formatting cannot grow the same note");
+
+                box.MaxLength = 9;
+                box.Text = "ab\r\ncd";
+                box.Select(2, 0);
+                Clipboard.SetText("x\ny");
+                box.Paste();
+                Equal("ab\r\ncd", box.PersistentText, "paste length includes the document's actual newline");
+                Equal(2, rejections, "the normalized paste is rejected before it exceeds the limit");
+            }
+            finally { window.Close(); }
+        });
         Check("Full mode preserves quote source and undo history", () =>
         {
             foreach (var source in new[] { "- > a\n  > b", "1. > a\n   > b", "> a\nb", "> a\n> > b\nlazy" })

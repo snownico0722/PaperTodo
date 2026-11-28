@@ -11,12 +11,12 @@ public static class PaperTypes
 
 public static class PaperLayoutDefaults
 {
-    public const double MinWidth = 96;
-    public const double MinHeight = 120;
-    public const double TopBarHeight = 23.5;
+    public static double MinWidth => InjectionParameters.LayoutMinWidth.Value;
+    public static double MinHeight => InjectionParameters.LayoutMinHeight.Value;
+    public static double TopBarHeight => InjectionParameters.LayoutTopBarHeight.Value;
 
-    public const double CapsuleWidth = 92; // 包含阴影边框边距
-    public const double CapsuleHeight = 46;
+    public static double CapsuleWidth => InjectionParameters.LayoutCapsuleWidth.Value; // 包含阴影边框边距
+    public static double CapsuleHeight => InjectionParameters.LayoutCapsuleHeight.Value;
 
     public const double TodoDefaultWidth = 280;
     public const double TodoDefaultHeight = 340;
@@ -122,12 +122,12 @@ public static class DeepCapsuleGapSizes
     public static string Normalize(string? size) =>
         size is Narrow or Wide ? size : Standard;
 
-    public static double Value(string? size) => Normalize(size) switch
+    public static double Value(string? size) => InjectionParameters.CapsuleGapFinal.Resolve(Normalize(size) switch
     {
-        Narrow => StandardGap - VariantDelta,
-        Wide => StandardGap + VariantDelta,
-        _ => StandardGap
-    };
+        Narrow => InjectionParameters.CapsuleGapBase.Value - InjectionParameters.CapsuleGapDelta.Value,
+        Wide => InjectionParameters.CapsuleGapBase.Value + InjectionParameters.CapsuleGapDelta.Value,
+        _ => InjectionParameters.CapsuleGapBase.Value
+    });
 }
 
 public static class TodoVisualSizes
@@ -156,16 +156,16 @@ public static class TodoVisualSizes
 
         return metrics with
         {
-            TextFontSize = AppTypography.Scale(metrics.TextFontSize),
-            TextVerticalPadding = AppTypography.Scale(metrics.TextVerticalPadding),
-            AppendMinHeight = AppTypography.Scale(metrics.AppendMinHeight),
-            AppendGlyphFontSize = AppTypography.Scale(metrics.AppendGlyphFontSize),
-            TrashGlyphFontSize = AppTypography.Scale(metrics.TrashGlyphFontSize),
-            LinkedPaperNameFontSize = AppTypography.Scale(metrics.LinkedPaperNameFontSize),
-            LinkedPaperIconFontSize = AppTypography.Scale(metrics.LinkedPaperIconFontSize),
-            CheckColumnWidth = AppTypography.Scale(metrics.CheckColumnWidth),
-            GhostTextFontSize = AppTypography.Scale(metrics.GhostTextFontSize),
-            RowMinHeight = AppTypography.Scale(metrics.RowMinHeight)
+            TextFontSize = InjectionParameters.TodoMetricTextFontSize.Resolve(AppTypography.Scale(metrics.TextFontSize)),
+            TextVerticalPadding = InjectionParameters.TodoMetricTextVerticalPadding.Resolve(AppTypography.Scale(metrics.TextVerticalPadding)),
+            AppendMinHeight = InjectionParameters.TodoMetricAppendMinHeight.Resolve(AppTypography.Scale(metrics.AppendMinHeight)),
+            AppendGlyphFontSize = InjectionParameters.TodoMetricAppendGlyphFontSize.Resolve(AppTypography.Scale(metrics.AppendGlyphFontSize)),
+            TrashGlyphFontSize = InjectionParameters.TodoMetricTrashGlyphFontSize.Resolve(AppTypography.Scale(metrics.TrashGlyphFontSize)),
+            LinkedPaperNameFontSize = InjectionParameters.TodoMetricLinkedPaperNameFontSize.Resolve(AppTypography.Scale(metrics.LinkedPaperNameFontSize)),
+            LinkedPaperIconFontSize = InjectionParameters.TodoMetricLinkedPaperIconFontSize.Resolve(AppTypography.Scale(metrics.LinkedPaperIconFontSize)),
+            CheckColumnWidth = InjectionParameters.TodoMetricCheckColumnWidth.Resolve(AppTypography.Scale(metrics.CheckColumnWidth)),
+            GhostTextFontSize = InjectionParameters.TodoMetricGhostTextFontSize.Resolve(AppTypography.Scale(metrics.GhostTextFontSize)),
+            RowMinHeight = InjectionParameters.TodoMetricRowMinHeight.Resolve(AppTypography.Scale(metrics.RowMinHeight))
         };
     }
 }

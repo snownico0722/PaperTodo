@@ -43,6 +43,8 @@ This log is written for general and power users alike. It focuses on user-facing
 
 #### Plugins & Body Types
 
+- **Global overrides and Good Lock (Plugin API 2.6).** Put a single sparse `user.json` beside PaperTodo to adjust typography, geometry, interaction and selected behaviors across all workspaces. The separately installable Good Lock plugin shows overrides, applies or resets them, and can restart PaperTodo. Removing an override restores the current setting or calculation. Older unsupported keys are kept in the file while the remaining values still apply. See the [parameter guide](doc/USER_INJECTION.en.md).
+
 - **Paper bottom bar (Plugin API 2.5).** Enable a plugin in Settings → Plugins; it can add items to every matching note or to-do, alongside other plugins. Compact status and action items share the bottom edge with the note zoom indicator.
 
 - **Plugin API 2.4.** Native and Web plugins can customize the capsule content of any paper in the workspace. Native plugins can also draw their own capsule content. Plugins with `notes.append` can add images to existing Markdown notes. Plugins written for 2.1 through 2.3 remain compatible.

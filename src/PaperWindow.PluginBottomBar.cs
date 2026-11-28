@@ -16,7 +16,8 @@ public sealed partial class PaperWindow
     {
         _bottomBar = new PaperBottomBarOverlay(this)
         {
-            Margin = new Thickness(12, 0, 12, 4)
+            Margin = new Thickness(InjectionParameters.BottomBarHorizontalInset.Value, 0,
+                InjectionParameters.BottomBarHorizontalInset.Value, InjectionParameters.BottomBarBottomInset.Value)
         };
         Grid.SetRow(_bottomBar, 1);
         Panel.SetZIndex(_bottomBar, 20);
@@ -97,7 +98,7 @@ public sealed partial class PaperWindow
         {
             var item = entry.Item;
             _invoke = entry.Invoke; // Same key may now refer to a newer item or Runtime.
-            var style = (Icon: item.Icon, Foreground: WeakTextBrush, Size: AppTypography.Scale(10.5), Font: AppTypography.UiFontFamily);
+            var style = (Icon: item.Icon, Foreground: WeakTextBrush, Size: AppTypography.Scale(InjectionParameters.BottomBarFontSize.Value), Font: AppTypography.UiFontFamily);
             if (_content == null || (item.Icon != null || _iconStyle.Icon != null) && !_iconStyle.Equals(style))
             {
                 _text = new TextBlock
@@ -146,7 +147,7 @@ public sealed partial class PaperWindow
         private readonly Dictionary<(string?, string), BottomBarItemView> _views = [];
         private readonly BottomBarItemView _ellipsis = new(false);
         private static readonly BottomBarEntry Ellipsis = new(null, new() { Text = "…" }, null);
-        private const double Gap = PaperBottomBarLayout.ItemGap;
+        private static double Gap => PaperBottomBarLayout.ItemGap;
 
         public void SetItems(IReadOnlyList<BottomBarEntry> entries)
         {

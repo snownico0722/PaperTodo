@@ -182,7 +182,8 @@ public sealed partial class AppController
         return new Border
         {
             Margin = new Thickness(14, 0, 0, 3),
-            Child = CompactSettingsField(Strings.Get(labelKey), frame, editorWidth: AppTypography.Scale(152), topMargin: 0)
+            Child = CompactSettingsField(Strings.Get(labelKey), WithInjectionAvailability(settingId, frame),
+                editorWidth: AppTypography.Scale(152), topMargin: 0)
         };
     }
 

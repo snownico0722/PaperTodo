@@ -80,6 +80,7 @@ public sealed partial class StateStore
             var candidate = JsonSerializer.Deserialize<AppState>(
                 merge.State.ToJsonString(JsonOptions), JsonOptions)
                 ?? throw new JsonException("Merged data cannot be null.");
+            ValidateImportedNoteLengths(candidate, memory);
             // Candidate settings may still be disputed. Normalizing dependent fields here
             // can irreversibly truncate a title before the user chooses a longer title limit.
             // Apply cross-field invariants once, after all choices, in CommitExternalMerge.
@@ -158,10 +159,12 @@ public sealed partial class StateStore
     /// The caller must not install the merged in-memory objects before this succeeds.
     /// </summary>
     internal (string? ConflictFile, string? ConflictDiffFile) CommitExternalMerge(
-        StateMergeResolution resolution, string observedDiskJson, long version)
+        StateMergeResolution resolution, string observedDiskJson, long version, AppState? current = null)
     {
         // Normalize against the selected settings, not the provisional conflict defaults.
         // The resolution owns a detached candidate; live objects are still untouched.
+        if (resolution.Conflicts.Count > 0)
+            ValidateImportedNoteLengths(resolution.State, current);
         NormalizeWorkspaceDocument(resolution.State);
         var json = SerializeRawState(resolution.State);
         _writeLock.Wait();

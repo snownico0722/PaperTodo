@@ -46,8 +46,8 @@ internal readonly record struct ExperimentalAttachmentPlan(
 
 internal static partial class ExperimentalWindowAttachmentGeometry
 {
-    private const double MinimumTetherHandleWidthDip = 48;
-    private const double MinimumTetherHandleHeightDip = 12;
+    private static double MinimumTetherHandleWidthDip => InjectionParameters.ExperimentalTetherHandleWidth.Value;
+    private static double MinimumTetherHandleHeightDip => InjectionParameters.ExperimentalTetherHandleHeight.Value;
 
     public static bool TryPlanCapsuleMagnet(
         DeviceScreenRect capsuleBounds,

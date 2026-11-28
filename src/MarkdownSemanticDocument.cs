@@ -18,7 +18,7 @@ internal readonly record struct MarkdownSourceChange(
 /// </summary>
 internal sealed class MarkdownSemanticDocument : IDisposable
 {
-    internal const int FullParseThresholdChars = 8_000;
+    internal static int FullParseThresholdChars => InjectionParameters.MarkdownFullParseThreshold.Value;
 
     private readonly ICSharpCode.AvalonEdit.Document.TextDocument _document;
     private MarkdownSemanticSnapshot _snapshot;

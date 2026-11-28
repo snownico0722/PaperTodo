@@ -10,17 +10,16 @@ namespace PaperTodo;
 
 public sealed class NoteImageStore : IDisposable
 {
-    // 4096 is the hard import/storage limit. Automatic compression targets 2048, but disabling
-    // compression may still store an untouched image between 2049 and 4096 pixels.
-    private const int MaxStoredDimension = 4096;
-    private const int AutoCompressedDimension = 2048;
-    private const int MaxImageBytes = 8 * 1024 * 1024;
-    private const int MaxInputImageBytes = 32 * 1024 * 1024;
+    // Disabling compression preserves the source within the per-image and store limits.
+    private static int MaxStoredDimension => InjectionParameters.NoteImageStoredDimension.Value;
+    private static int AutoCompressedDimension => InjectionParameters.NoteImageCompressedDimension.Value;
+    private static int MaxImageBytes => InjectionParameters.NoteImageStoredBytes.Value;
+    private static int MaxInputImageBytes => InjectionParameters.NoteImageInputBytes.Value;
     private const int MaxTotalImageBytes = 120 * 1024 * 1024;
-    // Decoded pixels (not the 120 MB encoded store). One version per image; LRU drops cold
+    // Decoded pixels (separate from the encoded store). One version per image; LRU drops cold
     // off-viewport entries. Currently visible (viewport-protected) ids ignore the caps.
-    private const long MaxDecodedBitmapBytes = 50L * 1024 * 1024;
-    private const int MaxBitmapCacheEntries = 20;
+    private static long MaxDecodedBitmapBytes => InjectionParameters.NoteImageDecodedBytes.Value;
+    private static int MaxBitmapCacheEntries => InjectionParameters.NoteImageCacheEntries.Value;
 
     private readonly object _gate = new();
     private readonly Dictionary<string, NoteImageAsset> _images = new(StringComparer.Ordinal);
@@ -1500,7 +1499,7 @@ public sealed class NoteImageStore : IDisposable
             _ => ".png"
         };
 
-    private static bool TryValidateIndex(
+    internal static bool TryValidateIndex(
         LmdbImageIndex index,
         out List<NoteImageAsset> images,
         out HashSet<string> corruptedImageIds,
@@ -1527,12 +1526,8 @@ public sealed class NoteImageStore : IDisposable
                 continue;
             }
 
-            if (asset.ByteLength > MaxTotalImageBytes - totalBytes)
-            {
-                corruptedImageIds.Add(asset.Id);
-                continue;
-            }
-
+            // An older store can exceed the current import budget. Keep every valid asset
+            // readable and count it toward subsequent imports.
             totalBytes += asset.ByteLength;
             images.Add(asset);
         }
@@ -1566,6 +1561,7 @@ public sealed class NoteImageStore : IDisposable
         }
     }
 
+    // Existing assets remain readable after lowering the limits for new imports.
     private static bool TryValidateAssetMetadata(NoteImageAsset asset)
     {
         if (asset == null ||
@@ -1574,8 +1570,7 @@ public sealed class NoteImageStore : IDisposable
             asset.Mime != NormalizeMime(asset.Mime) ||
             asset.Width <= 0 ||
             asset.Height <= 0 ||
-            Math.Max(asset.Width, asset.Height) > MaxStoredDimension ||
-            asset.ByteLength is <= 0 or > MaxImageBytes ||
+            asset.ByteLength <= 0 ||
             string.IsNullOrWhiteSpace(asset.Sha256) ||
             asset.Sha256.Length != 64)
         {

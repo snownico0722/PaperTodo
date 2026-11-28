@@ -13,7 +13,7 @@ internal readonly record struct MarkdownSemanticIncrementalWindow(
 
 internal sealed partial class MarkdownSemanticSnapshot
 {
-    private const int IncrementalWindowChars = 1024;
+    private static int IncrementalWindowChars => InjectionParameters.MarkdownIncrementalWindow.Value;
 
     /// <summary>
     /// Re-parses one local window around an edit. The 1K target may expand to complete semantics

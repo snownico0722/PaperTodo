@@ -16,7 +16,7 @@ namespace PaperTodo;
 
 public sealed partial class PaperWindow
 {
-    internal const int NoteTextMaxLength = 100000;
+    internal static int NoteTextMaxLength => InjectionParameters.NoteTextLimit.Value;
     private const int WindowsErrorNoAssociation = 1155;
     internal void RefreshNoteForExternalChange()
     {

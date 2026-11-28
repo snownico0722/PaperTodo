@@ -8,6 +8,7 @@ var checks = new (string Name, Action Run)[]
     ("note-html-embeds-images-and-rejects-missing-assets", NoteHtmlChecks.Run),
     ("new-workspace-and-legacy-markdown-defaults", NewWorkspaceAndLegacyMarkdownDefaults),
     ("paper-background-preferences-are-core-settings", PaperBackgroundPreferencesAreCoreSettings),
+    ("existing-image-index-counts-assets-above-import-budget", ExistingImageIndexCountsAssetsAboveImportBudget),
     ("primary-save-faults-keep-a-loadable-generation", PrimarySaveFaultsKeepALoadableGeneration),
     ("backup-refresh-fault-keeps-old-backup", BackupRefreshFaultKeepsOldBackup),
     ("corrupt-primary-never-refreshes-backup", CorruptPrimaryNeverRefreshesBackup),
@@ -53,6 +54,31 @@ if (failed != 0)
 
 Console.WriteLine($"Persistence checks passed: {checks.Length}/{checks.Length}");
 return 0;
+
+static void ExistingImageIndexCountsAssetsAboveImportBudget()
+{
+    const int assetBytes = 8 * 1024 * 1024;
+    var assets = Enumerable.Range(100, 16).Select(id => new NoteImageAsset
+    {
+        Id = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        NoteId = "legacy-note",
+        Width = 2048,
+        Height = 2048,
+        Sha256 = new string('a', 64),
+        ByteLength = assetBytes
+    }).ToList();
+    var index = new LmdbImageIndex(assets, [], 116);
+
+    Assert(NoteImageStore.TryValidateIndex(index, out var loaded, out var corrupted, out var totalBytes)
+        && loaded.SequenceEqual(assets) && corrupted.Count == 0 && totalBytes == 16L * assetBytes,
+        "valid assets in an existing 128 MiB library must remain accessible and count towards further imports");
+
+    assets[0].Width = 5000;
+    assets[0].ByteLength += 1024;
+    Assert(NoteImageStore.TryValidateIndex(index, out loaded, out corrupted, out totalBytes)
+        && loaded.SequenceEqual(assets) && corrupted.Count == 0 && totalBytes == 16L * assetBytes + 1024,
+        "existing assets imported with raised per-image limits must still load after resetting those limits");
+}
 
 static void NewWorkspaceAndLegacyMarkdownDefaults()
 {

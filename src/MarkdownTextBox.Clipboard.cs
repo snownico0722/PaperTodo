@@ -142,10 +142,20 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        // Rectangular paste owns segmented replacement. Preflight without subtracting the
-        // surrounding selection range, since that range includes unselected text.
-        var selectedLength = editor.TextArea.Selection is RectangleSelection ? 0 : editor.SelectionLength;
-        if (!editor.TryBuildSafePasteText(clipboardText, selectedLength, out _))
+        var containsImageReference = ContainsPotentialPaperTodoImageReference(clipboardText);
+        // Rectangular paste cannot credit the surrounding selection. Native whole-line paste
+        // inserts at the start of the line; it also leaves the current selection intact.
+        var insertsWholeLine = !containsImageReference && editor.Options.CutCopyWholeLine &&
+            e.DataObject.GetDataPresent("MSDEVLineSelect");
+        var selectedLength = insertsWholeLine || editor.TextArea.Selection is RectangleSelection ? 0 : editor.SelectionLength;
+        var preflightText = clipboardText;
+        if (!containsImageReference && clipboardText.Length <= MaxSafePasteLength)
+        {
+            // AvalonEdit normalizes line endings after this event, before inserting the text.
+            var newLine = TextUtilities.GetNewLineFromDocument(editor.Document, editor.TextArea.Caret.Line);
+            preflightText = TextUtilities.NormalizeNewLines(clipboardText, newLine);
+        }
+        if (!editor.TryBuildSafePasteText(preflightText, selectedLength, out _))
         {
             e.CancelCommand();
             editor.PasteRejected?.Invoke();
@@ -156,7 +166,7 @@ public sealed partial class MarkdownTextBox
         // transfer image blocks, so keep their source as plain text.
         if (editor.TextArea.Selection is RectangleSelection rectangle)
         {
-            if (ContainsPotentialPaperTodoImageReference(clipboardText))
+            if (containsImageReference)
             {
                 var plainText = editor.PrepareRectangularImagePaste(rectangle, clipboardText);
                 if (plainText == null)
@@ -176,7 +186,7 @@ public sealed partial class MarkdownTextBox
             return;
         }
 
-        if (!ContainsPotentialPaperTodoImageReference(clipboardText))
+        if (!containsImageReference)
         {
             return;
         }

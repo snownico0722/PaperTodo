@@ -10,10 +10,10 @@ This is the **current PaperTodo plugin development manual**. It documents the cu
 New plugins use:
 
 ```json
-"apiVersion": "2.5"
+"apiVersion": "2.6"
 ```
 
-The current host exposes Protocol `2.5` and remains backward-compatible with `2.1` through `2.4`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.5`; existing plugins can keep running within their declared contract.
+The current host exposes Protocol `2.6` and remains backward-compatible with `2.1` through `2.5`. Protocol `2.0` and earlier are no longer load-compatible. New plugins should target `2.6`; existing plugins can keep running within their declared contract.
 
 ### Plugin API version history
 
@@ -23,7 +23,7 @@ The current host exposes Protocol `2.5` and remains backward-compatible with `2.
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.5**.
+A newer host may load an older compatible plugin. An older host must reject a plugin that requires a newer API. PaperTodo currently supports **2.1 through 2.6**.
 
 | API | Status | Main contract milestones |
 | --- | --- | --- |
@@ -33,7 +33,8 @@ A newer host may load an older compatible plugin. An older host must reject a pl
 | 2.2 | Supported | Adds cross-paper presentation, public application Settings API (`settings.read/update`), settings `type: "action"` command buttons, `startupPaper.presentation: "hidden"`, reminder trigger state/events, and Web Runtime host-event subscriptions. |
 | 2.3 | Supported | Adds `MenuOnly` / `menuOnly` to top-bar action descriptors, showing an action only in the plugin action menu without creating a title-bar button. |
 | 2.4 | Supported | Adds image append to built-in Markdown notes with `notes.append` and Runtime capsule customization across the workspace. |
-| 2.5 | Current | Adds per-paper bottom bar contributions to notes and to-dos. |
+| 2.5 | Supported | Adds per-paper bottom bar contributions to notes and to-dos. |
+| 2.6 | Current | Adds the Native global `user.json` API for inspection, application, suggestions and restart. |
 
 **Versioning rule:** a backward-compatible new plugin-visible contract (manifest field/type, permission, event, public API surface, or new observable semantics) advances the minor version after the current minor is published. Host-only implementation changes and bug fixes do not. Breaking an existing plugin contract advances the major version. Multiple compatible additions developed before one minor is released may ship together in that minor.
 
@@ -77,7 +78,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -181,7 +182,7 @@ Native `plugin.json`:
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -284,7 +285,7 @@ Both `entry` and `miniEntry` must remain inside the plugin directory. `miniEntry
   "id": "com.example.weather",
   "name": "Weather",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -566,6 +567,35 @@ All three adapters share one service. Core preferences synchronously save throug
 
 Todo linking remains available through the existing Workspace update request (`UpdateLinkedPaper=true`, `LinkedPaperId=null` unlinks). MCP adds `update_todo(clear_linked_paper=true)` for unambiguous unlinking; it conflicts with a non-null `linked_paper_id`. Omitting both leaves the link unchanged. Before creating a long-detail Note for a Todo, query `todo.paper_links`; when disabled or unknown, skip that approach unless the user explicitly requests a settings change.
 
+
+### 5.6 Global `user.json` injection API (2.6)
+
+The optional `IPaperInjectionApi` capability edits the host's process-global override file, separately from ordinary workspace preferences and plugin state. Native Body and provider Runtime access it through `context.InjectionApi`. It is also usable without Good Lock: hand-edit the same `user.json` and restart PaperTodo. Internal injection IDs may change or retire with their modules; query the catalog instead of guessing field names.
+
+`Read` and `Suggest` require `settings.read`; `Apply` and `Restart` require `settings.update`.
+
+```csharp
+var api = context.InjectionApi;
+var before = api.Read(); // Reads the latest file without adopting its changes.
+var result = api.Apply(new PaperInjectionPatch
+{
+    ExpectedRevision = before.Revision,
+    Set = new Dictionary<string, JsonElement>
+    {
+        ["fullscreen.pollIntervalMs"] = JsonSerializer.SerializeToElement(100)
+    }
+});
+// After editing the file externally, adopt it without rewriting the document:
+api.Apply();
+```
+
+The snapshot contains the file path/revision, its sparse overrides, and parameter descriptions. Each parameter reports whether an override exists in the file and in the running host, along with `status` (`default`, `pending`, `applied`, or `restart`) and application timing (`live`, `next_use`, or `restart`). A default may be a number, a short description of a calculation, or unavailable. Recommended bounds describe advice and do not reject otherwise accepted values.
+
+`PaperInjectionPatch.Set` changes named keys, `Remove` clears named overrides, and `ResetAll` clears the override file before applying any supplied changes. Unmentioned entries, including unknown keys, remain intact. A local patch supplies the revision observed by `Read`; an external file change produces `injection_conflict`. Read the new file and let the user review the pending edits before submitting again. A null or empty patch simply adopts the latest file. Explicitly setting the current default still creates an override; remove the key to restore its original source.
+
+`Suggest(id, value, draftOverrides)` returns an optional single-value suggestion and explanation. A rule may consider related draft values; it is not a general optimizer and does not save or apply its answer. `Restart()` requests normal saved shutdown/restart. A call from a Body session returns to that Paper; a provider Runtime has no current Paper to return to. It does not implicitly apply a plugin's private draft: call `Apply` first.
+
+[Good Lock](PaperTodo.Plugin.GoodLock/README.md) is the official Native consumer. It lists changed entries, uses the external editor for normal value editing, and keeps reset/adjustment actions as a pending patch. Returning to its Paper refreshes the file without a background watcher. Its source is in `plugin-samples/`; the separately installable compiled plugin is in `plugins/official.good-lock.native/`.
 
 ## 6. Workspace Permissions and Data API
 
@@ -1300,7 +1330,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ### Manifest / Runtime
 
-- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.5`, and new plugins should target `2.5`;
+- targeting `apiVersion: "2.0"` or earlier for a new plugin; the current host supports `2.1`–`2.6`, and new plugins should target `2.6`;
 - plugin directory name does not match `id`;
 - `id` uses invalid characters or the reserved host IDs `data` / `data1`–`data5` / `builtin.markdown`;
 - Web declares `runtime`, but the default `runtime.html` is missing, or an explicit `runtime` path is missing/outside the Web `entry` static directory;
@@ -1367,7 +1397,7 @@ When starting a new plugin, copy the smallest structure from the sample closest 
 
 ## 14. Before Submitting a Plugin
 
-- new `plugin.json` targets the current `apiVersion: "2.5"`. Declare an older version when intentionally staying within that contract;
+- new `plugin.json` targets the current `apiVersion: "2.6"`. Declare an older version when intentionally staying within that contract;
 - all metadata lives only in `plugin.json`; the Native entry DLL provides behavior only;
 - when declaring `runtime`: Native implements `IPaperPluginRuntimeProvider`; Web provides `runtime.html` next to `entry` by default, or uses `runtime` to select another entry inside the same Web static directory;
 - when Runtime needs plugin settings, use its own `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`; do not borrow a hidden paper session;

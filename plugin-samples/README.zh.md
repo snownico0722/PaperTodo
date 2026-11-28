@@ -10,10 +10,10 @@
 新插件使用：
 
 ```json
-"apiVersion": "2.5"
+"apiVersion": "2.6"
 ```
 
-当前宿主最新协议为 `2.5`，并继续兼容 `2.1`～`2.4`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.5` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
+当前宿主最新协议为 `2.6`，并继续兼容 `2.1`～`2.5`。实验性 `2.0` 及更早 manifest 不再兼容加载。新插件应以 `2.6` 为目标；已有插件只要不使用其声明版本之后新增的能力仍可继续运行。
 
 ### 插件 API 版本历史
 
@@ -23,7 +23,7 @@
 MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 ```
 
-因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.5**。
+因此新宿主可以继续加载仍在兼容范围内的旧插件；旧宿主遇到依赖更高 API 的新插件则必须拒绝加载。当前 PaperTodo 支持 **2.1～2.6**。
 
 | API | 状态 | 主要合同里程碑 |
 | --- | --- | --- |
@@ -33,7 +33,8 @@ MinimumSupportedApiVersion <= plugin.apiVersion <= CurrentApiVersion
 | 2.2 | 继续支持 | 新增跨纸片显示控制、公共软件 Settings API（`settings.read/update`）、settings `type: "action"` 命令按钮、`startupPaper.presentation: "hidden"`、提醒触发状态/事件及 Web Runtime 宿主事件订阅。 |
 | 2.3 | 继续支持 | 顶栏操作新增 `MenuOnly` / `menuOnly`，可仅显示在插件操作菜单。 |
 | 2.4 | 继续支持 | 支持通过 `notes.append` 向内置 Markdown 笔记追加图片，并开放 Runtime 跨纸片定制胶囊。 |
-| 2.5 | 当前最新 | 开放按声明类型作用于笔记或待办的插件底栏。 |
+| 2.5 | 继续支持 | 开放按声明类型作用于笔记或待办的插件底栏。 |
+| 2.6 | 当前最新 | Native Body 和 Runtime 可查询与应用全局 `user.json`，可请求建议和正常重启。 |
 
 **升版规则：**当前 minor 正式发布后，只要新增向后兼容、插件可观察的新合同（manifest 字段/类型、permission、事件、公开 API surface 或新语义），下一批就升 minor；纯宿主内部实现、性能优化和 bugfix 不升。破坏已有插件合同才升 major。同一个尚未发布的 minor 可以一起收纳多项兼容新增，不需要每加一个字段就连续制造多个版本号。
 
@@ -77,7 +78,7 @@ plugins/com.example.hello/
   "id": "com.example.hello",
   "name": "Hello",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "web/index.html"
 }
@@ -181,7 +182,7 @@ Native `plugin.json`：
   "id": "com.example.hello-native",
   "name": "Hello Native",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "HelloPlugin.dll"
 }
@@ -253,7 +254,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
 | `description` | 插件说明 |
 | `locales` | 可选；覆盖宿主绘制的 manifest/settings 多语言文案，见 §3.4 |
 | `version` | 插件版本，必须能解析为 `Version` |
-| `apiVersion` | 新插件使用 `"2.5"`，兼容 `"2.1"`～`"2.4"` |
+| `apiVersion` | 新插件使用 `"2.6"`，兼容 `"2.1"`～`"2.4"` |
 | `stateVersion` | 宿主代管 JSON 的目标版本；同时用于 per-paper frontend state 和 provider Runtime state，至少为 1 |
 | `maxPaperInstances` | 可选；同一 Provider 最多允许存在的真实 Paper 数。省略默认 `1`，`0` 表示不限制；隐藏/折叠 Paper 仍计数 |
 | `entry` | Web 主页面或 Native 入口 DLL，必须位于插件目录内 |
@@ -284,7 +285,7 @@ Native 最终目录只保留运行所需内容。不要分发无必要的 PDB/XM
   "id": "com.example.weather",
   "name": "天气",
   "version": "1.0.0",
-  "apiVersion": "2.3",
+  "apiVersion": "2.4",
   "stateVersion": 1,
   "entry": "web/index.html",
   "miniEntry": "web/mini.html",
@@ -567,6 +568,35 @@ List 返回数组。每项包含稳定的 `id`、`category`、本地化 `title`�
 
 待办关联沿用 Workspace 更新请求：`UpdateLinkedPaper=true`、`LinkedPaperId=null` 表示解绑。MCP 增加 `update_todo(clear_linked_paper=true)`，与非空 `linked_paper_id` 互斥；两者都省略表示不改关联。准备为长待办创建详细 Note 前，应先查询 `todo.paper_links`；关闭或未知时跳过该方案，除非用户明确要求先改设置。
 
+
+### 5.6 全局 `user.json` 注入（API 2.6）
+
+可选能力 `IPaperInjectionApi` 管理宿主全局覆盖文件，与工作区普通偏好、插件私有状态分开。Native Body 和 provider Runtime 通过 `context.InjectionApi` 使用。不安装 Good Lock 也能手改同一份 `user.json`，重启 PaperTodo 后采用。内部注入键可能随模块改写而调整或退役；先查询目录，不猜内部字段名。
+
+`Read` / `Suggest` 需要 `settings.read`，`Apply` / `Restart` 需要 `settings.update`。
+
+```csharp
+var api = context.InjectionApi;
+var before = api.Read(); // 读取最新文件，但不采用文件中的新修改。
+var result = api.Apply(new PaperInjectionPatch
+{
+    ExpectedRevision = before.Revision,
+    Set = new Dictionary<string, JsonElement>
+    {
+        ["fullscreen.pollIntervalMs"] = JsonSerializer.SerializeToElement(100)
+    }
+});
+// 外部编辑器保存后，只采用最新文件，不重写整份文档：
+api.Apply();
+```
+
+快照包含文件路径、修订号、稀疏覆盖项和参数说明。每项区分文件中的覆盖与运行中已采用的覆盖，提供 `status`（`default`、`pending`、`applied`、`restart`）和生效时机（`live`、`next_use`、`restart`）。默认值可以是一个数、计算方式的简短说明或空；不需要追踪整条动态计算链。建议上下界只用于提示，不会拒绝技术上可接受的值。
+
+`PaperInjectionPatch.Set` 设置指定键，`Remove` 删除指定覆盖，`ResetAll` 先清空覆盖再合入本批设置。未涉及的键以及未知键均保留。提交本页草稿时携带 `Read` 得到的修订号；文件被外部编辑后返回 `injection_conflict`，应重新读取，让用户检查待应用项后再提交。空 patch 只采用最新文件。显式写入与当前默认相同的值仍算覆盖；删除键才恢复原取值来源。
+
+`Suggest(id, value, draftOverrides)` 返回可选的单值建议与说明。规则可以参考相关草稿值，不是通用优化器，也不保存或自动采用建议。`Restart()` 走正常保存退出与重启；Body 会话调用后回到该纸片，provider Runtime 没有可返回的当前纸片。它不会替插件提交私有草稿，应先调用 `Apply`。
+
+[Good Lock](PaperTodo.Plugin.GoodLock/README.md) 是官方 Native 使用例：页面只列修改，常规编辑使用外部编辑器；重置与优化形成待应用 patch。返回纸片时刷新文件，不使用后台文件监听。源码放在 `plugin-samples/`，独立安装的编译产物放在 `plugins/official.good-lock.native/`。
 
 ## 6. Workspace 权限与数据 API
 
@@ -1302,7 +1332,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ### Manifest / Runtime
 
-- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.5`，已有 `2.1`～`2.4` 插件继续兼容；
+- 新插件仍以 `apiVersion: "2.0"` 或更早版本为目标；新开发应使用 `2.6`，已有 `2.1`～`2.5` 插件继续兼容；
 - 插件目录名和 `id` 不一致；
 - `id` 使用非法字符或宿主保留 ID `data` / `data1`–`data5` / `builtin.markdown`；
 - Web 声明 `runtime`，但默认 `runtime.html` 不存在，或显式 `runtime` 路径不存在/跑出 Web `entry` 静态目录；
@@ -1369,7 +1399,7 @@ Native 插件是 fully trusted / unsandboxed .NET/WPF 代码，与 PaperTodo 当
 
 ## 14. 提交插件前
 
-- 新 `plugin.json` 使用当前目标 `apiVersion: "2.5"`，需要兼容旧宿主时声明对应版本；
+- 新 `plugin.json` 使用当前目标 `apiVersion: "2.6"`，需要兼容旧宿主时声明对应版本；
 - 所有 metadata 只在 `plugin.json` 中声明，Native 入口 DLL 只提供行为实现；
 - 声明 `runtime` 时：Native 实现 `IPaperPluginRuntimeProvider`；Web 默认提供 `entry` 同目录 `runtime.html`，或用 `runtime` 指定同一 Web 静态目录内的其他入口；
 - Runtime 需要插件设置时使用自己的 `context.Settings.Json` + `Settings.Subscribe(...)` / `papertodo.settings.get()` + `settingsChanged`，不借用隐藏 paper session；

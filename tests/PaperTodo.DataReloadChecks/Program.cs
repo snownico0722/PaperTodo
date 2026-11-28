@@ -26,6 +26,7 @@ internal static partial class Program
             var checks = new (string Name, Action Run)[]
             {
                 ("explicit request accepts external snapshot; no revision metadata", ExplicitImport),
+                ("reload and merge preserve legacy long notes and reject new growth", LegacyNoteLengthEdits),
                 ("invalid or missing input never falls back to backup", InvalidInput),
                 ("persisted notes at the limit retain their image anchor through reload and catalog updates", TrailingImageAnchorLength),
                 ("old async writes cannot replace an accepted import", SaveFence),
@@ -192,6 +193,40 @@ internal static partial class Program
         File.Delete(missing.Store.FilePath);
         Require(missing.Store.ReloadExternalState(2).Result.Outcome == "invalid" &&
             !File.Exists(missing.Store.FilePath), "missing input used an implicit fallback");
+    }
+
+    private static void LegacyNoteLengthEdits()
+    {
+        using var s = new Scope();
+        var historical = new string('x', PaperWindow.NoteTextMaxLength + 5);
+        s.Memory.Papers[0].Content = historical;
+        var baseline = s.Store.SerializeState(s.Memory);
+        var external = J(baseline);
+        external["papers"]![0]!["title"] = "rename";
+        s.Write(external);
+        var shorter = historical[..^1];
+        s.Memory.Papers[0].Content = shorter;
+        var preview = s.Store.PreviewExternalMerge(s.Memory, 2, baseline);
+        Require(preview.State?.Papers[0].Content == shorter && preview.Conflicts is { Count: 0 },
+            "a historical baseline larger than the current note blocked an independent rename");
+        s.Store.CommitExternalMerge(ResolvePreview(preview), preview.ObservedDiskJson!, 2, s.Memory);
+        var merged = s.Read();
+        Require(Str(merged["papers"]![0]!["content"]) == shorter &&
+                Str(merged["papers"]![0]!["title"]) == "rename",
+            "accepting the merge lost the shorter text or the rename");
+
+        merged["papers"]![0]!["content"] = historical + "x";
+        s.Write(merged);
+        Require(s.Store.ReloadExternalState(3, s.Memory).Result.Outcome == "invalid",
+            "reload allowed the same paper to grow again above the limit");
+        var conflict = s.Store.PreviewExternalMerge(s.Memory, 3, baseline);
+        Require(conflict.Conflicts is { Count: > 0 }, "the two edits did not produce a content conflict");
+        Throws<System.Text.Json.JsonException>(() => s.Store.CommitExternalMerge(
+            ResolvePreview(conflict, ConflictChoice.KeepExternal), conflict.ObservedDiskJson!, 3, s.Memory));
+        merged["papers"]![0]!["content"] = shorter[..^1];
+        s.Write(merged);
+        Require(s.Store.ReloadExternalState(3, s.Memory).State?.Papers[0].Content == shorter[..^1],
+            "reload rejected a valid shorter note");
     }
 
     private static void SaveFence()

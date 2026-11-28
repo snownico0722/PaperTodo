@@ -186,7 +186,8 @@ internal static partial class Program
         validateApi.Invoke(null, new object[] { "2.3" });
         validateApi.Invoke(null, new object[] { "2.4" });
         validateApi.Invoke(null, new object[] { "2.5" });
-        foreach (var rejected in new[] { "2.0", "2.6", "3.0" })
+        validateApi.Invoke(null, new object[] { "2.6" });
+        foreach (var rejected in new[] { "2.0", "2.7", "3.0" })
         {
             try
             {

@@ -24,7 +24,8 @@ public sealed partial class PaperWindow
         var pluginContentWidth = PluginCapsuleRequestedContentWidth(pixelsPerDip);
         if (pluginContentWidth.HasValue)
         {
-            return Math.Max(34, Math.Ceiling(pluginContentWidth.Value + WindowChromeMargin));
+            return InjectionParameters.CapsuleEdgeWidth.Resolve(
+                Math.Max(34, Math.Ceiling(pluginContentWidth.Value + WindowChromeMargin)));
         }
 
         // A resting edge tag owns exactly the pixels it renders: one interior shadow margin plus
@@ -42,9 +43,9 @@ public sealed partial class PaperWindow
             CapsuleRightPadding);
         // Plugin-requested widths return above; this branch sizes only the built-in icon/title tag.
         // In zero-character mode keep its icon and side padding without the generic 34-DIP floor.
-        return hideTitle
-            ? bodyWidth + WindowChromeMargin
-            : Math.Max(34, bodyWidth + WindowChromeMargin);
+        return InjectionParameters.CapsuleEdgeWidth.Resolve(hideTitle
+            ? Math.Max(InjectionParameters.EdgeIconOnlyMinimumWidth.Value, bodyWidth + WindowChromeMargin)
+            : Math.Max(34, bodyWidth + WindowChromeMargin));
     }
 
     private double ExpandedDeepCapsuleVisibleWidth()
